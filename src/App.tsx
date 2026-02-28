@@ -640,8 +640,8 @@ function App() {
   function onClick(info: PickingInfo) {
     //const safeInfo=info|| [];
     const f = info.coordinate as [number, number];
-    setLng(f[0]);
-    setLat(f[1]);
+    setLng(Number(f[0].toFixed(25)));
+    setLat(Number(f[1].toFixed(25)));
 
     const d = info.object as DataT;
     if (d) {
@@ -899,8 +899,8 @@ function App() {
           onChange={handleDescription}
         //width="150%"
         />
-        <Input type="number" value={lat} />
-        <Input type="number" value={lng} />
+        <Input type="number" value={Number(lat.toFixed(10))} />
+        <Input type="number" value={Number(lng.toFixed(10))} />
       </Flex>
       <Divider orientation="horizontal" />
       <br />
@@ -932,7 +932,7 @@ function App() {
                   onClick={onClick}
 
                 />
-                <Marker latitude={lat} longitude={lng} />
+                <Marker latitude={Number(lat.toFixed(10))} longitude={Number(lng.toFixed(10))} />
                 {clickInfo && (
                   <Popup
                     key={`${clickInfo.geometry.coordinates[0]}-${clickInfo.geometry.coordinates[1]}`}
