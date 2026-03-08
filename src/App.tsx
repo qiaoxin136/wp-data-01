@@ -57,6 +57,8 @@ import {
   Tabs,
   SelectField,
   ScrollView,
+  Radio,
+  RadioGroupField,
   //CheckboxField,
   // TextField,
 } from "@aws-amplify/ui-react";
@@ -139,7 +141,7 @@ export type CustomEvent = {
 }
 // Hong's addition end
 
-const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+//const MAP_STYLE = "mapbox://styles/mapbox/streets-v12";
 // "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
 
@@ -170,6 +172,7 @@ function App() {
   const [placePhotos, setPlacePhotos] = useState<File[]>([]);
 
   const [tab, setTab] = useState("1");
+  const [basemap, setBasemap] = useState("mapbox://styles/mapbox/streets-v12");
 
   //const [clickInfo, setClickInfo] = useState<DataT>();
   //const [showPopup, setShowPopup] = useState<boolean>(true);
@@ -506,6 +509,16 @@ function App() {
   const onMouseEnter = useCallback(() => setCursor('pointer'), []);
   const onMouseLeave = useCallback(() => setCursor('grab'), []);
 
+  const change_basemap = (value: string) => {
+    if (value === "light") {
+      setBasemap("mapbox://styles/mapbox/light-v11")
+    } else if (value === "street") {
+      setBasemap("mapbox://styles/mapbox/streets-v12")
+    } else if (value === "satellite") {
+      setBasemap("mapbox://styles/mapbox/satellite-v9")
+    }
+  };
+
   return (
     <main>
       <h1>Washington Park Project</h1>
@@ -600,10 +613,11 @@ function App() {
                 }}
                 mapboxAccessToken={MAPBOX_TOKEN}
                 //mapLib={maplibregl}
-                mapStyle={MAP_STYLE} // Use any MapLibre-compatible style
+                mapStyle={basemap} // Use any MapLibre-compatible style
+
                 style={{
                   width: "100%",
-                  height: "800px",
+                  height: "1000px",
                   borderColor: "#000000",
                 }}
                 interactiveLayerIds={['water-points']}
@@ -746,54 +760,17 @@ function App() {
                   </>
 
                 )}
-
-                {/* {clickInfo && (
-                  <Popup
-                    key={`${clickInfo.geometry.coordinates[0]}-${clickInfo.geometry.coordinates[1]}`}
-                    latitude={clickInfo.geometry.coordinates[1]}
-                    longitude={clickInfo.geometry.coordinates[0]}
-                    anchor="bottom"
-                    onClose={() => setShowPopup(false)}
-                  >
-                    {clickInfo.properties.date} <br />
-                    {clickInfo.properties.track} <br />
-                    {clickInfo.properties.type} <br />
-                    <Button
-                      onClick={() => {
-                        console.log("clickinfo =" + clickInfo);
-                        deleteLocation(clickInfo.properties.id);
-                        setShowPopup(false);
-                      }}
-                    >
-                      Delete{" "}
-                    </Button>
-                    <br />
-                    <br />
-
-
-                    <label>Place photos:</label><br />
-                    <input type="file" multiple
-                      onChange={(e) => previewPhotos(e)}
-                      placeholder="new picture"
-                    /><br />
-
-                    <Button
-                      onClick={(e) => {
-                        console.log(clickInfo.properties);
-                        handleSubmit(e, clickInfo.properties.id);
-                        setShowPopup(false);
-                      }}
-                    >
-                      Upload
-                    </Button>
-                  </Popup>
-                )} */}
                 <NavigationControl position="top-right" />
-                <ScaleControl position="bottom-right" />
+                <ScaleControl position="bottom-right" unit='imperial' maxWidth={500} />
                 <GeolocateControl position="top-right" positionOptions={{ enableHighAccuracy: true }}
                   trackUserLocation={true}
                   // Draw an arrow next to the location dot to indicate which direction the device is heading.
                   showUserHeading={true} />
+                <RadioGroupField legend="Row" name="row" direction="row" onChange={(e) => change_basemap(e.target.value)} defaultValue="street">
+                  <Radio value="light" >Light</Radio>
+                  <Radio value="street">Street</Radio>
+                  <Radio value="satellite">Satellite</Radio>
+                </RadioGroupField>
               </Map>
             </>)
           },
