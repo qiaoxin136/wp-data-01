@@ -172,6 +172,7 @@ function App() {
   const [tab, setTab] = useState("1");
   const [basemap, setBasemap] = useState("mapbox://styles/mapbox/streets-v12");
   const [calResult, setCalResult] = useState<number | null>(null);
+  const [unitCosts, setUnitCosts] = useState<{ diameter: number; price: number }[]>([]);
 
   //const [clickInfo, setClickInfo] = useState<DataT>();
   //const [showPopup, setShowPopup] = useState<boolean>(true);
@@ -238,6 +239,13 @@ function App() {
 
   useEffect(() => {
     handleUserName();
+  }, []);
+
+  useEffect(() => {
+    fetch("https://50fb42daa5.execute-api.us-east-1.amazonaws.com/test/getData")
+      .then(res => res.json())
+      .then(data => setUnitCosts(data))
+      .catch(err => console.error("Failed to fetch unit costs:", err));
   }, []);
 
 
@@ -850,6 +858,205 @@ function App() {
                 </ThemeProvider>
               </ScrollView>
             </>)
+          },
+          {
+            label: "Statistics",
+            value: "3",
+            content: (() => {
+              const buildTableRows = (type: string) => {
+                const items = location.filter(loc => loc.type === type);
+                const aggMap: Record<string, { track: number; diameter: number; totalLength: number }> = {};
+                for (const item of items) {
+                  const key = `${item.track}-${item.diameter}`;
+                  if (!aggMap[key]) {
+                    aggMap[key] = { track: item.track ?? 0, diameter: item.diameter ?? 0, totalLength: 0 };
+                  }
+                  aggMap[key].totalLength += Number(item.length ?? 0);
+                }
+                return Object.values(aggMap).sort((a, b) => (a.track - b.track) || (a.diameter - b.diameter));
+              };
+
+              const fmt = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+              const computePipeTotal = (type: string) =>
+                buildTableRows(type).reduce((sum, row) => {
+                  const unitCost = unitCosts.find(u => u.diameter === row.diameter)?.price ?? 0;
+                  return sum + row.totalLength * unitCost;
+                }, 0);
+
+              const computePavTotal = () => {
+                const TRACK_WIDTH_FT = 16;
+                const UNIT_COST_PER_SY = 10;
+                const totalLength = location
+                  .filter(loc => loc.type === "pavement")
+                  .reduce((sum, item) => sum + Number(item.length ?? 0), 0);
+                return (totalLength * TRACK_WIDTH_FT / 9) * UNIT_COST_PER_SY;
+              };
+
+              const t1Cost = computePipeTotal("water");
+              const t2Cost = computePipeTotal("wastewater");
+              const t3Cost = computePipeTotal("stormwater");
+              const t4Cost = computePavTotal();
+
+              const COL_WIDTHS = ['8%', '13%', '13%', '13%', '13%', '22%', '18%'];
+              const tableStyle = { width: '100%', fontFamily: 'Arial, sans-serif', tableLayout: 'fixed' as const };
+              const thStyle = (i: number) => ({ width: COL_WIDTHS[i] });
+
+              const renderTable = (label: string, type: string) => {
+                const rows = buildTableRows(type);
+                const totalCost = rows.reduce((sum, row) => {
+                  const unitCost = unitCosts.find(u => u.diameter === row.diameter)?.price ?? 0;
+                  return sum + row.totalLength * unitCost;
+                }, 0);
+                return (
+                  <>
+                    <h3>{label}</h3>
+                    <ThemeProvider theme={theme} colorMode="light">
+                      <Table caption="" highlightOnHover={false} variation="striped" style={tableStyle}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell as="th" style={thStyle(0)}>Track</TableCell>
+                            <TableCell as="th" style={thStyle(1)}>Type</TableCell>
+                            <TableCell as="th" style={thStyle(2)}>Diameter (in)</TableCell>
+                            <TableCell as="th" style={thStyle(3)}>Length (ft)</TableCell>
+                            <TableCell as="th" style={thStyle(4)}>Area (sq yd)</TableCell>
+                            <TableCell as="th" style={thStyle(5)}>Unit Cost ($/ft)</TableCell>
+                            <TableCell as="th" style={thStyle(6)}>Cost ($)</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {rows.map(row => {
+                            const unitCost = unitCosts.find(u => u.diameter === row.diameter)?.price ?? 0;
+                            return (
+                              <TableRow key={`${row.track}-${row.diameter}`}>
+                                <TableCell>{row.track}</TableCell>
+                                <TableCell>{type}</TableCell>
+                                <TableCell>{row.diameter}</TableCell>
+                                <TableCell>{row.totalLength.toFixed(1)}</TableCell>
+                                <TableCell>—</TableCell>
+                                <TableCell>{fmt(unitCost)}</TableCell>
+                                <TableCell>{fmt(row.totalLength * unitCost)}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                          <TableRow>
+                            <TableCell colSpan={6} style={{ fontWeight: 'bold', textAlign: 'right' }}>Total</TableCell>
+                            <TableCell style={{ fontWeight: 'bold' }}>{fmt(totalCost)}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </ThemeProvider>
+                  </>
+                );
+              };
+
+              return (
+                <ScrollView height="800px" padding="1rem">
+                  {renderTable("Table 1 - Water", "water")}
+                  <br />
+                  {renderTable("Table 2 - Wastewater", "wastewater")}
+                  <br />
+                  {renderTable("Table 3 - Stormwater", "stormwater")}
+                  <br />
+                  {(() => {
+                    const pavementItems = location.filter(loc => loc.type === "pavement");
+                    const trackMap: Record<string, { track: number; totalLength: number }> = {};
+                    for (const item of pavementItems) {
+                      const key = String(item.track ?? 0);
+                      if (!trackMap[key]) {
+                        trackMap[key] = { track: item.track ?? 0, totalLength: 0 };
+                      }
+                      trackMap[key].totalLength += Number(item.length ?? 0);
+                    }
+                    const pavRows = Object.values(trackMap).sort((a, b) => a.track - b.track);
+                    const TRACK_WIDTH_FT = 16;
+                    const UNIT_COST_PER_SY = 10;
+                    const pavTotal = pavRows.reduce((sum, row) => {
+                      const areaSY = (row.totalLength * TRACK_WIDTH_FT) / 9;
+                      return sum + areaSY * UNIT_COST_PER_SY;
+                    }, 0);
+                    return (
+                      <>
+                        <h3>Table 4 - Pavement</h3>
+                        <ThemeProvider theme={theme} colorMode="light">
+                          <Table caption="" highlightOnHover={false} variation="striped" style={tableStyle}>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell as="th" style={thStyle(0)}>Track</TableCell>
+                                <TableCell as="th" style={thStyle(1)}>Type</TableCell>
+                                <TableCell as="th" style={thStyle(2)}>Diameter (in)</TableCell>
+                                <TableCell as="th" style={thStyle(3)}>Length (ft)</TableCell>
+                                <TableCell as="th" style={thStyle(4)}>Area (sq yd)</TableCell>
+                                <TableCell as="th" style={thStyle(5)}>Unit Cost ($/sq yd)</TableCell>
+                                <TableCell as="th" style={thStyle(6)}>Cost ($)</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {pavRows.map(row => {
+                                const areaSY = (row.totalLength * TRACK_WIDTH_FT) / 9;
+                                const cost = areaSY * UNIT_COST_PER_SY;
+                                return (
+                                  <TableRow key={row.track}>
+                                    <TableCell>{row.track}</TableCell>
+                                    <TableCell>pavement</TableCell>
+                                    <TableCell>—</TableCell>
+                                    <TableCell>{row.totalLength.toFixed(1)}</TableCell>
+                                    <TableCell>{areaSY.toFixed(1)}</TableCell>
+                                    <TableCell>{fmt(UNIT_COST_PER_SY)}</TableCell>
+                                    <TableCell>{fmt(cost)}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                              <TableRow>
+                                <TableCell colSpan={6} style={{ fontWeight: 'bold', textAlign: 'right' }}>Total</TableCell>
+                                <TableCell style={{ fontWeight: 'bold' }}>{fmt(pavTotal)}</TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </ThemeProvider>
+                      </>
+                    );
+                  })()}
+                  <br />
+                  {(() => {
+                    const summary = [
+                      { label: "Table 1 - Water",       cost: t1Cost },
+                      { label: "Table 2 - Wastewater",  cost: t2Cost },
+                      { label: "Table 3 - Stormwater",  cost: t3Cost },
+                      { label: "Table 4 - Pavement",    cost: t4Cost },
+                    ];
+                    const grandTotal = summary.reduce((sum, r) => sum + r.cost, 0);
+                    return (
+                      <>
+                        <h3>Table 5 - Summary</h3>
+                        <ThemeProvider theme={theme} colorMode="light">
+                          <Table caption="" highlightOnHover={false} variation="striped" style={tableStyle}>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell as="th" colSpan={6} style={thStyle(0)}>Category</TableCell>
+                                <TableCell as="th" style={thStyle(6)}>Cost ($)</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {summary.map(row => (
+                                <TableRow key={row.label}>
+                                  <TableCell colSpan={6}>{row.label}</TableCell>
+                                  <TableCell>{fmt(row.cost)}</TableCell>
+                                </TableRow>
+                              ))}
+                              <TableRow>
+                                <TableCell colSpan={6} style={{ fontWeight: 'bold' }}>Grand Total</TableCell>
+                                <TableCell style={{ fontWeight: 'bold' }}>{fmt(grandTotal)}</TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </ThemeProvider>
+                      </>
+                    );
+                  })()}
+                </ScrollView>
+              );
+            })()
           },
           {
             label: "Photos",
