@@ -232,10 +232,10 @@ function App() {
   }
 
   useEffect(() => {
-
-    client.models.Location.observeQuery().subscribe({
+    const sub = client.models.Location.observeQuery().subscribe({
       next: (data) => setLocation([...data.items]),
     });
+    return () => sub.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -270,6 +270,7 @@ function App() {
 
       lat: lat,
       lng: lng,
+      joint: joint,
 
     });
     setDate("");
@@ -648,7 +649,15 @@ function App() {
                     type='circle'
                     source='water-data'
                     paint={{
-                      'circle-radius': 6,
+                      'circle-radius': [
+                        'case',
+                        ['all',
+                          ['any', ['==', ['get', 'type'], 'wastewater'], ['==', ['get', 'type'], 'stormwater']],
+                          ['==', ['get', 'joint'], true]
+                        ],
+                        8,
+                        4.2
+                      ],
                       'circle-color': [
                         'match',
                         ['get', 'type'],
@@ -740,6 +749,10 @@ function App() {
                             <tr>
                               <td>Track</td>
                               <td>{popupInfo.properties.track}</td>
+                            </tr>
+                            <tr>
+                              <td>Joint</td>
+                              <td>{popupInfo.properties.joint == null ? '' : popupInfo.properties.joint ? 'true' : 'false'}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -897,7 +910,7 @@ function App() {
                           <TableCell /* width="15%" */>{location.photos ? location.photos.length : 0}</TableCell>
                           <TableCell /* width="15%" */>{location.lat}</TableCell>
                           <TableCell /* width="15%" */>{location.lng}</TableCell>
-                          <TableCell>{location.joint != null ? String(location.joint) : ''}</TableCell>
+                          <TableCell>{location.joint == null ? '' : location.joint ? 'true' : 'false'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -941,21 +954,29 @@ function App() {
                 return (totalLength * TRACK_WIDTH_FT / 9) * UNIT_COST_PER_SY;
               };
 
+              const MH_UNIT_COST = 1500;
+              const mhCount = location.filter(loc => loc.type === "wastewater").length;
+              const mhCost = mhCount * MH_UNIT_COST;
+              const swMhCount = location.filter(loc => loc.type === "stormwater").length;
+              const swMhCost = swMhCount * MH_UNIT_COST;
+
               const t1Cost = computePipeTotal("water");
-              const t2Cost = computePipeTotal("wastewater");
-              const t3Cost = computePipeTotal("stormwater");
+              const t2Cost = computePipeTotal("wastewater") + mhCost;
+              const t3Cost = computePipeTotal("stormwater") + swMhCost;
               const t4Cost = computePavTotal();
 
               const COL_WIDTHS = ['8%', '13%', '13%', '13%', '13%', '22%', '18%'];
               const tableStyle = { width: '100%', fontFamily: 'Arial, sans-serif', tableLayout: 'fixed' as const };
               const thStyle = (i: number) => ({ width: COL_WIDTHS[i] });
 
-              const renderTable = (label: string, type: string) => {
+              type ExtraRow = { cells: (string | number)[]; cost: number };
+              const renderTable = (label: string, type: string, extras: ExtraRow[] = []) => {
                 const rows = buildTableRows(type);
-                const totalCost = rows.reduce((sum, row) => {
+                const pipeCost = rows.reduce((sum, row) => {
                   const unitCost = unitCosts.find(u => u.diameter === row.diameter)?.price ?? 0;
                   return sum + row.totalLength * unitCost;
                 }, 0);
+                const totalCost = pipeCost + extras.reduce((s, e) => s + e.cost, 0);
                 return (
                   <>
                     <h3>{label}</h3>
@@ -987,6 +1008,12 @@ function App() {
                               </TableRow>
                             );
                           })}
+                          {extras.map((extra, i) => (
+                            <TableRow key={`extra-${i}`}>
+                              {extra.cells.map((cell, j) => <TableCell key={j}>{cell}</TableCell>)}
+                              <TableCell>{fmt(extra.cost)}</TableCell>
+                            </TableRow>
+                          ))}
                           <TableRow>
                             <TableCell colSpan={6} style={{ fontWeight: 'bold', textAlign: 'right' }}>Total</TableCell>
                             <TableCell style={{ fontWeight: 'bold' }}>{fmt(totalCost)}</TableCell>
@@ -1002,9 +1029,13 @@ function App() {
                 <ScrollView height="800px" padding="1rem">
                   {renderTable("Table 1 - Water", "water")}
                   <br />
-                  {renderTable("Table 2 - Wastewater", "wastewater")}
+                  {renderTable("Table 2 - Wastewater", "wastewater", [
+                    { cells: ['—', 'wastewater', 'MH', mhCount, '—', `$${MH_UNIT_COST.toLocaleString()}/ea`], cost: mhCost }
+                  ])}
                   <br />
-                  {renderTable("Table 3 - Stormwater", "stormwater")}
+                  {renderTable("Table 3 - Stormwater", "stormwater", [
+                    { cells: ['—', 'stormwater', 'MH', swMhCount, '—', `$${MH_UNIT_COST.toLocaleString()}/ea`], cost: swMhCost }
+                  ])}
                   <br />
                   {(() => {
                     const pavementItems = location.filter(loc => loc.type === "pavement");

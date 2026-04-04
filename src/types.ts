@@ -7,6 +7,7 @@ export interface WaterFeatureProperties {
   type: string;
   diameter: number;
   length: number;
+  joint: boolean | null;
 }
 
 export interface WaterFeature {
