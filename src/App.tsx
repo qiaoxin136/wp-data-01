@@ -215,9 +215,7 @@ function App() {
     setDiameter(parseInt(e.target.value));
   }
 
-  const handleLength = (e: ChangeEvent<HTMLInputElement>) => {
-    setLength(parseInt(e.target.value));
-  }
+
 
   const handleUserName = async () => {
     const name = await checkLoginAndGetName();
@@ -475,6 +473,7 @@ function App() {
     }
 
     if (!latest || latest.lat == null || latest.lng == null) {
+      setLength(0);
       setCalResult(0);
       return;
     }
@@ -583,13 +582,7 @@ function App() {
           onChange={handleDiameter}
         //width="150%"
         />
-        <input
-          type="number"
-          value={length}
-          placeholder="length (ft)"
-          onChange={handleLength}
-        //width="150%"
-        />
+  
         <Input
           type="text"
           value={description}
@@ -644,7 +637,8 @@ function App() {
                         ['get', 'type'],
                         'water', '#2b6cb0', // Diameter of exactly 10 is red
                         "wastewater", '#2ea160', // Diameter of exactly 20 is green
-                        '#eca4a4'         // Fallback color for any other value
+                        "stormwater", '#eca4a4',
+                        "pavement", '#a0a0a0',  '#2b6cb0'       // Fallback color for any other value
                       ]/* '#2b6cb0' */,
                       'circle-stroke-color': '#ffffff',
                       'circle-stroke-width': 2,
