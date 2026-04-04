@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r tab /c/temp/wp-data-01/src --include=*.tsx --include=*.ts --include=*.jsx --include=*.js -i)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

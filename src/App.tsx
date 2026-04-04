@@ -1,5 +1,5 @@
 import type { ChangeEvent, SyntheticEvent } from "react";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { Schema } from "../amplify/data/resource";
 import { checkLoginAndGetName } from "./utils/AuthUtils";
 import { useAuthenticator } from '@aws-amplify/ui-react';
@@ -75,8 +75,6 @@ import './FeaturePopup.css';
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiaGF6ZW5zYXd5ZXIiLCJhIjoiY2xmMnY0NzE1MGMzMjNycGp6bDQwcWZsNyJ9.1JJeWIQgrykU5b3oqSr1sQ";
 const client = generateClient<Schema>();
-
-type ByCategory = Record<string, { count: number; sum: number }>;
 
 
 const theme: Theme = {
@@ -173,12 +171,11 @@ function App() {
 
   const [tab, setTab] = useState("1");
   const [basemap, setBasemap] = useState("mapbox://styles/mapbox/streets-v12");
+  const [calResult, setCalResult] = useState<number | null>(null);
 
   //const [clickInfo, setClickInfo] = useState<DataT>();
   //const [showPopup, setShowPopup] = useState<boolean>(true);
 
-
-  const { totalSum, totalCount, byCategory } = useExpenseAggregates();
 
   //const { data } = useGeoJSON();
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
@@ -259,7 +256,7 @@ function App() {
       track: track,
       type: type,
       diameter: diameter,
-      length: length,
+      length: calResult !== null ? calResult : length,
       username: name,
       description: description,
 
@@ -448,41 +445,41 @@ function App() {
 
   //end Hong's addition
 
-  function useExpenseAggregates() {
-    const [items, setItems] = useState<Array<Schema["Location"]["type"]>>([]);
+  function haversineDistanceFt(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 20902464; // Earth radius in feet
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
 
-    useEffect(() => {
-      // Realtime query (updates when data changes)
-      const sub = client.models.Location.observeQuery({
-        // optional: add filter to limit what you pull down
-        // filter: { createdAt: { ge: "2025-12-01T00:00:00.000Z" } },
-      }).subscribe({
-        next: ({ items }) => setItems(items),
-        error: (err) => console.error(err),
-      });
+  function handleCal() {
+    const sameTrack = location.filter(loc => loc.track === track);
+    if (sameTrack.length === 0) {
+      setCalResult(0);
+      return;
+    }
 
-      return () => sub.unsubscribe();
-    }, []);
-
-    const aggregates = useMemo(() => {
-      const byCategory: ByCategory = {};
-      let totalSum = 0;
-
-      for (const e of items) {
-        const cat = e.track ?? 0;
-        const amt = Number(e.length ?? 0);
-
-        totalSum += amt;
-
-        if (!byCategory[cat]) byCategory[cat] = { count: 0, sum: 0 };
-        byCategory[cat].count += 1;
-        byCategory[cat].sum += amt;
+    // Find the point with the latest combined date+time on the same track
+    let latest: Schema["Location"]["type"] | null = null;
+    let latestDT = "";
+    for (const loc of sameTrack) {
+      const dt = (loc.date ?? "") + "T" + (loc.time ?? "");
+      if (dt > latestDT) {
+        latestDT = dt;
+        latest = loc;
       }
+    }
 
-      return { totalSum, byCategory, totalCount: items.length };
-    }, [items]);
+    if (!latest || latest.lat == null || latest.lng == null) {
+      setCalResult(0);
+      return;
+    }
 
-    return aggregates;
+    setCalResult(haversineDistanceFt(lat, lng, latest.lat, latest.lng));
   }
 
   const onClick = useCallback((e: MapMouseEvent) => {
@@ -531,6 +528,14 @@ function App() {
         <Button onClick={createLocation} backgroundColor={"azure"} color={"red"}>
           + new
         </Button>
+        <Button onClick={handleCal} backgroundColor={"lightyellow"} color={"darkblue"}>
+          Cal
+        </Button>
+        {calResult !== null && (
+          <span style={{ alignSelf: "center", fontWeight: "bold" }}>
+            Distance: {calResult.toFixed(1)} ft
+          </span>
+        )}
       </Flex>
       <br />
       <Flex direction="row">
@@ -850,23 +855,6 @@ function App() {
                   </Table>
                 </ThemeProvider>
               </ScrollView>
-            </>)
-          },
-          {
-            label: "Statistics",
-            value: "3",
-            content: (<>
-              <div>
-                <h2>Total Length (ft): {totalSum.toFixed(0)} ({totalCount} items)</h2>
-
-                <ul>
-                  {Object.entries(byCategory).map(([cat, v]) => (
-                    <li key={cat}>
-                      {cat}: {v.sum.toFixed(0)} feet ({v.count} counts)
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </>)
           },
           {
