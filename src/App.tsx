@@ -131,7 +131,7 @@ type SelectOption = {
 };
 
 const AIR_PORTS =
-  "https://drd977abuk.execute-api.us-east-1.amazonaws.com/test/getData";
+  "https://etwzctydh9.execute-api.us-east-1.amazonaws.com/test/getData";
 
 
 
