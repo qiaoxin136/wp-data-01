@@ -165,6 +165,7 @@ function App() {
   const [length, setLength] = useState<number>(0);
   const [userName, setUserName] = useState<string>();
   const [description, setDescription] = useState<string>("");
+  const [joint, setJoint] = useState<boolean>(true);
   const [lat, setLat] = useState(0);
   const [lng, setLng] = useState(0);
   const [placePhotos, setPlacePhotos] = useState<File[]>([]);
@@ -598,6 +599,14 @@ function App() {
           onChange={handleDescription}
           width="800px"
         />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+          <input
+            type="checkbox"
+            checked={joint}
+            onChange={e => setJoint(e.target.checked)}
+          />
+          Joint
+        </label>
         {/* <Input type="number" value={Number(lat.toFixed(10))} />
         <Input type="number" value={Number(lng.toFixed(10))} /> */}
       </Flex>
