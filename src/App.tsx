@@ -669,11 +669,10 @@ function App() {
                     paint={{
                       'circle-radius': [
                         'case',
-                        ['all',
-                          ['any', ['==', ['get', 'type'], 'wastewater'], ['==', ['get', 'type'], 'stormwater']],
-                          ['any', ['==', ['get', 'joint'], true], ['==', ['get', 'joint'], false]]
-                        ],
-                        8,
+                        ['all', ['any', ['==', ['get', 'type'], 'wastewater'], ['==', ['get', 'type'], 'stormwater']], ['==', ['get', 'joint'], false]],
+                        7,
+                        ['all', ['any', ['==', ['get', 'type'], 'wastewater'], ['==', ['get', 'type'], 'stormwater']], ['==', ['get', 'joint'], true]],
+                        4.2,
                         4.2
                       ],
                       'circle-color': [
