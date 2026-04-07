@@ -866,18 +866,9 @@ function App() {
                 ariaLabel="View example"
                 backgroundColor="var(--amplify-colors-white)"
                 borderRadius="6px"
-                //border="1px solid var(--amplify-colors-black)"
-                // boxShadow="3px 3px 5px 6px var(--amplify-colors-neutral-60)"
                 color="var(--amplify-colors-blue-60)"
-                // height="45rem"
-                // maxWidth="100%"
                 padding="1rem"
-              // width="100%"
-              // width="1000px"
-              // height={"2400px"}
-              // maxHeight={"2400px"}
-              // maxWidth="1000px"
-
+                height="800px"
               >
                 <ThemeProvider theme={theme} colorMode="light">
                   <Table caption="" highlightOnHover={false} variation="striped"
@@ -902,7 +893,13 @@ function App() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {location.map((location) => (
+                      {[...location].sort((a, b) => {
+                          const trackDiff = (a.track ?? 0) - (b.track ?? 0);
+                          if (trackDiff !== 0) return trackDiff;
+                          const dateA = `${a.date ?? ''}T${a.time ?? ''}`;
+                          const dateB = `${b.date ?? ''}T${b.time ?? ''}`;
+                          return dateA.localeCompare(dateB);
+                        }).map((location) => (
                         <TableRow
                           onDoubleClick={(e) => {
                             console.log("location photos url =", location.photos)
