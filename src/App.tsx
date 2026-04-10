@@ -5,8 +5,7 @@ import { checkLoginAndGetName } from "./utils/AuthUtils";
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { generateClient } from "aws-amplify/data";
 import "@aws-amplify/ui-react/styles.css";
-import { uploadData, remove } from "aws-amplify/storage";
-import { StorageImage } from "@aws-amplify/ui-react-storage"; //Hong
+import { uploadData, remove, getUrl } from "aws-amplify/storage";
 
 import type { MapMouseEvent } from "mapbox-gl";
 
@@ -143,6 +142,15 @@ export type CustomEvent = {
 // "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
 
+function PhotoImg({ path, height }: { path: string; height: number }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    getUrl({ path }).then(({ url }) => setSrc(url.toString())).catch(() => setSrc(null));
+  }, [path]);
+  if (!src) return null;
+  return <img src={src} alt={path} height={height} style={{ marginLeft: '10px', marginBottom: '8px' }} />;
+}
+
 interface PopupInfo {
   longitude: number;
   latitude: number;
@@ -156,7 +164,8 @@ function App() {
   //const client = generateClient<Schema>();
   const [location, setLocation] = useState<Array<Schema["Location"]["type"]>>([]);
   const [jointMap, setJointMap] = useState<Record<string, boolean | null>>({});
-
+  type PhotoRecord = { id: string; date: string | null; description: string | null; photos: (string | null)[] | null };
+  const [photosData, setPhotosData] = useState<PhotoRecord[]>([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   //const [report, setReport] = useState("");
@@ -255,6 +264,30 @@ function App() {
   }, [location]);
 
   useEffect(() => {
+    const fetchAllPhotos = async () => {
+      try {
+        let all: PhotoRecord[] = [];
+        let nextToken: string | null | undefined = undefined;
+        do {
+          const { data, nextToken: token }: { data: Array<Schema["Location"]["type"]>; nextToken?: string | null } =
+            await client.models.Location.list({ limit: 1000, nextToken });
+          all = all.concat(data.map(d => ({
+            id: d.id,
+            date: d.date ?? null,
+            description: d.description ?? null,
+            photos: d.photos ?? null,
+          })));
+          nextToken = token;
+        } while (nextToken);
+        setPhotosData(all);
+      } catch (err) {
+        console.error('Failed to fetch photos:', err);
+      }
+    };
+    fetchAllPhotos();
+  }, [location]);
+
+  useEffect(() => {
     handleUserName();
   }, []);
 
@@ -350,37 +383,25 @@ function App() {
 
   async function handleSubmit(event: SyntheticEvent, id: string) {
     event.preventDefault();
-    //console.log(id);
-    //console.log(userName);
 
-    if (userName) {
-      let placePhotosUrls: string[] = [];
-      console.log("before submit, photoes size ", placePhotos.length);
-      const uploadResult = await uploadPhotos(placePhotos, id)   //Hong
-      placePhotosUrls = uploadResult.urls;
+    let placePhotosUrls: string[] = [];
+    console.log("before submit, photoes size ", placePhotos.length);
+    const uploadResult = await uploadPhotos(placePhotos, id);
+    placePhotosUrls = uploadResult.urls;
 
-      const currentLoc = await client.models.Location.get({
-        id: id
-      })
+    const currentLoc = await client.models.Location.get({ id });
 
-      let revised: string[] = []
-      if (currentLoc.data?.photos) {
-        currentLoc.data.photos.forEach(
-          (d) => {
-            d ? revised.push(d) : null
-          }
-        )
-      }
-
-      await client.models.Location.update({
-        id: id,
-        photos: [...placePhotosUrls, ...revised]
-
-      })
-
-
-      clearFields();
+    let revised: string[] = [];
+    if (currentLoc.data?.photos) {
+      currentLoc.data.photos.forEach(d => { if (d) revised.push(d); });
     }
+
+    await client.models.Location.update({
+      id: id,
+      photos: [...placePhotosUrls, ...revised]
+    });
+
+    clearFields();
   }
 
   function clearFields() {
@@ -422,32 +443,6 @@ function App() {
       //setPlacePhotos(newFiles);
       setPlacePhotos(eventPhotos)
     }
-  }
-
-  function renderPhotos() {
-
-    const rows: any[] = []
-
-    if (location) {
-
-      location.forEach((loc, index) => {
-        if (loc.photos) {
-
-          rows.push(
-            <h4>Date: {loc.date}  &nbsp; &nbsp;&nbsp; Description: {loc.description}
-              &nbsp; &nbsp; &nbsp;</h4>)
-          loc.photos.forEach((photo, idx) => {
-            if (photo) {
-              rows.push(<StorageImage path={photo}
-                alt={photo} key={index * 1000 + idx} height={300}
-                style={{ marginLeft: '10px' }} />)
-            }
-          })
-
-        }
-      })
-    }
-    return rows;
   }
 
   async function deleteLocationPhotos(locId: string): Promise<{
@@ -1154,10 +1149,40 @@ function App() {
           {
             label: "Photos",
             value: "4",
-            content: (<>
-              <h3>Photos and Comments</h3>
-              {renderPhotos()}
-            </>)
+            content: (() => {
+              const photoRows: React.ReactNode[] = [];
+              photosData
+                .filter(loc => loc.photos && loc.photos.length > 0)
+                .sort((a, b) => {
+                  const da = a.date ?? '';
+                  const db = b.date ?? '';
+                  return db.localeCompare(da);
+                })
+                .forEach((loc, index) => {
+                  photoRows.push(
+                    <div key={`h-${index}`} style={{ marginTop: '16px', marginBottom: '4px' }}>
+                      <strong>Date:</strong> {loc.date ?? '—'}&nbsp;&nbsp;&nbsp;
+                      <strong>Description:</strong> {loc.description ?? '—'}
+                    </div>
+                  );
+                  loc.photos!.forEach((photo, idx) => {
+                    if (photo) {
+                      photoRows.push(
+                        <PhotoImg
+                          key={`${index}-${idx}`}
+                          path={photo}
+                          height={300}
+                        />
+                      );
+                    }
+                  });
+                });
+              return (
+                <ScrollView height="800px" style={{ padding: '16px' }}>
+                  {photoRows.length > 0 ? photoRows : <p>No photos uploaded yet.</p>}
+                </ScrollView>
+              );
+            })()
           },
         ]}
       />
