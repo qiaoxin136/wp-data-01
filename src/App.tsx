@@ -964,9 +964,9 @@ function App() {
               };
 
               const MH_UNIT_COST = 1500;
-              const mhCount = location.filter(loc => loc.type === "wastewater").length;
+              const mhCount = location.filter(loc => loc.type === "wastewater" && jointMap[loc.id] === false).length;
               const mhCost = mhCount * MH_UNIT_COST;
-              const swMhCount = location.filter(loc => loc.type === "stormwater").length;
+              const swMhCount = location.filter(loc => loc.type === "stormwater" && jointMap[loc.id] === false).length;
               const swMhCost = swMhCount * MH_UNIT_COST;
 
               const t1Cost = computePipeTotal("water");
@@ -1035,7 +1035,7 @@ function App() {
               };
 
               return (
-                <ScrollView height="800px" padding="1rem">
+                <ScrollView height="calc(100vh - 250px)" padding="1rem">
                   {renderTable("Table 1 - Water", "water")}
                   <br />
                   {renderTable("Table 2 - Wastewater", "wastewater", [
@@ -1178,7 +1178,7 @@ function App() {
                   });
                 });
               return (
-                <ScrollView height="800px" style={{ padding: '16px' }}>
+                <ScrollView height="calc(100vh - 250px)" style={{ padding: '16px' }}>
                   {photoRows.length > 0 ? photoRows : <p>No photos uploaded yet.</p>}
                 </ScrollView>
               );
