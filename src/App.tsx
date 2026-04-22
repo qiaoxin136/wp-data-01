@@ -247,8 +247,19 @@ function App() {
   }
 
   useEffect(() => {
-    const sub = client.models.Location.observeQuery().subscribe({
+    // Exclude 'comments' (a.ref custom type) from the selection set.
+    // When comments is included, observeQuery's internal findIndexByFields
+    // crashes with "Cannot read properties of null (reading 'id')" whenever
+    // a record is updated and comments is null.
+    const sub = client.models.Location.observeQuery({
+      selectionSet: [
+        'id', 'date', 'time', 'track', 'type', 'diameter',
+        'length', 'lat', 'lng', 'username', 'description',
+        'photos', 'joint', 'createdAt', 'updatedAt',
+      ] as const,
+    }).subscribe({
       next: (data) => setLocation([...data.items]),
+      error: (err) => console.error('observeQuery error:', err),
     });
     return () => sub.unsubscribe();
   }, []);
@@ -469,6 +480,48 @@ function App() {
 
   //end Hong's addition
 
+  async function handleUpdatePopup(id: string) {
+    // Use raw GraphQL to bypass the Amplify Gen 2 client-side field-validation
+    // bug triggered by the `comments: a.ref('Comment').array()` custom type.
+    const mutation = /* GraphQL */ `
+      mutation UpdateLocation($input: UpdateLocationInput!) {
+        updateLocation(input: $input) {
+          id
+          track
+          type
+          diameter
+          description
+          joint
+        }
+      }
+    `;
+    try {
+      const input: Record<string, unknown> = { id };
+      input.type        = editType;
+      input.description = editDescription;
+      input.joint       = editJoint;
+      const parsedTrack    = parseInt(editTrack);
+      const parsedDiameter = parseFloat(editDiameter);
+      if (editTrack    !== '' && !isNaN(parsedTrack))    input.track    = parsedTrack;
+      if (editDiameter !== '' && !isNaN(parsedDiameter)) input.diameter = parsedDiameter;
+
+      console.log('Updating via GraphQL:', input);
+      const result = await (client as any).graphql({ query: mutation, variables: { input } });
+      console.log('Update result:', result);
+
+      // Manually patch local state so the UI reflects the change immediately,
+      // independent of the observeQuery subscription which can crash on custom types.
+      const { data: fresh } = await client.models.Location.get({ id });
+      if (fresh) {
+        setLocation(prev => prev.map(loc => loc.id === id ? fresh : loc));
+      }
+      setPopupInfo(null);
+    } catch (err) {
+      console.error('Update exception:', err);
+      alert('Save failed: ' + String(err));
+    }
+  }
+
   function haversineDistanceFt(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 20902464; // Earth radius in feet
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -533,7 +586,7 @@ function App() {
       setEditType(props.type ?? 'water');
       setEditJoint(match?.joint !== false);
     };
-  }, []);
+  }, [location]);
 
   const onMouseEnter = useCallback(() => setCursor('pointer'), []);
   const onMouseLeave = useCallback(() => setCursor('grab'), []);
@@ -828,17 +881,7 @@ function App() {
                         </table>
                         <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
                         <button
-                          onClick={async () => {
-                            await client.models.Location.update({
-                              id: popupInfo.properties.id,
-                              track: editTrack !== '' ? parseInt(editTrack) : undefined,
-                              type: editType,
-                              diameter: editDiameter !== '' ? parseInt(editDiameter) : undefined,
-                              description: editDescription,
-                              joint: editJoint,
-                            });
-                            setPopupInfo(null);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); handleUpdatePopup(popupInfo.properties.id); }}
                           style={{
                             fontSize: '11px', padding: '2px 8px', cursor: 'pointer',
                             border: '1px solid #2b6cb0', borderRadius: '3px',
@@ -881,6 +924,18 @@ function App() {
                           }}
                         >
                           Upload
+                        </button>
+                        <br /><br />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleUpdatePopup(popupInfo.properties.id); }}
+                          style={{
+                            fontSize: '12px', padding: '4px 16px', cursor: 'pointer',
+                            border: '1px solid #2b6cb0', borderRadius: '4px',
+                            background: '#2b6cb0', color: '#fff', fontWeight: 600,
+                            width: '100%',
+                          }}
+                        >
+                          Apply
                         </button>
                       </div>
                     </Popup>
