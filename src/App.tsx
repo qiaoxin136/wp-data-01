@@ -192,6 +192,11 @@ function App() {
   //const { data } = useGeoJSON();
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
   const [cursor, setCursor] = useState<string>('grab');
+  const [editTrack, setEditTrack] = useState<string>('');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [editDiameter, setEditDiameter] = useState<string>('');
+  const [editType, setEditType] = useState<string>('water');
+  const [editJoint, setEditJoint] = useState<boolean>(true);
 
 
 
@@ -521,7 +526,12 @@ function App() {
         longitude: lng,
         latitude: lat,
         properties: { ...props, joint: match?.joint ?? null },
-      })
+      });
+      setEditTrack(props.track != null ? String(props.track) : '');
+      setEditDescription(props.description ?? '');
+      setEditDiameter(props.diameter != null ? String(props.diameter) : '');
+      setEditType(props.type ?? 'water');
+      setEditJoint(match?.joint !== false);
     };
   }, []);
 
@@ -752,22 +762,91 @@ function App() {
                               <td>Date</td>
                               <td>{popupInfo.properties.date}</td>
                             </tr>
-                            {popupInfo.properties.description && (
-                              <tr>
-                                <td>Description</td>
-                                <td>{popupInfo.properties.description}</td>
-                              </tr>
-                            )}
+                            <tr>
+                              <td>Type</td>
+                              <td>
+                                <select
+                                  value={editType}
+                                  onChange={e => setEditType(e.target.value)}
+                                  style={{ fontSize: '11px', padding: '2px 4px', width: '100%' }}
+                                >
+                                  <option value="water">water</option>
+                                  <option value="wastewater">wastewater</option>
+                                  <option value="stormwater">stormwater</option>
+                                  <option value="pavement">pavement</option>
+                                </select>
+                              </td>
+                            </tr>
                             <tr>
                               <td>Track</td>
-                              <td>{popupInfo.properties.track}</td>
+                              <td>
+                                <input
+                                  type="number"
+                                  value={editTrack}
+                                  onChange={e => setEditTrack(e.target.value)}
+                                  style={{ fontSize: '11px', padding: '2px 4px', width: '100%' }}
+                                />
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Diameter</td>
+                              <td>
+                                <input
+                                  type="number"
+                                  value={editDiameter}
+                                  onChange={e => setEditDiameter(e.target.value)}
+                                  style={{ fontSize: '11px', padding: '2px 4px', width: '100%' }}
+                                />
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Description</td>
+                              <td>
+                                <input
+                                  type="text"
+                                  value={editDescription}
+                                  onChange={e => setEditDescription(e.target.value)}
+                                  style={{ fontSize: '11px', padding: '2px 4px', width: '100%' }}
+                                />
+                              </td>
                             </tr>
                             <tr>
                               <td>Joint</td>
-                              <td>{popupInfo.properties.joint == null ? '' : popupInfo.properties.joint ? 'true' : 'false'}</td>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={editJoint}
+                                  onChange={e => setEditJoint(e.target.checked)}
+                                  style={{ cursor: 'pointer', width: '14px', height: '14px' }}
+                                />
+                                <span style={{ fontSize: '11px', marginLeft: '6px' }}>
+                                  {editJoint ? 'true' : 'false'}
+                                </span>
+                              </td>
                             </tr>
                           </tbody>
                         </table>
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                        <button
+                          onClick={async () => {
+                            await client.models.Location.update({
+                              id: popupInfo.properties.id,
+                              track: editTrack !== '' ? parseInt(editTrack) : undefined,
+                              type: editType,
+                              diameter: editDiameter !== '' ? parseInt(editDiameter) : undefined,
+                              description: editDescription,
+                              joint: editJoint,
+                            });
+                            setPopupInfo(null);
+                          }}
+                          style={{
+                            fontSize: '11px', padding: '2px 8px', cursor: 'pointer',
+                            border: '1px solid #2b6cb0', borderRadius: '3px',
+                            background: '#fff', color: '#2b6cb0',
+                          }}
+                        >
+                          Save
+                        </button>
                         <button
                           onClick={() => {
                             deleteLocation(popupInfo.properties.id);
@@ -781,6 +860,7 @@ function App() {
                         >
                           Delete
                         </button>
+                        </div>
                         <br /><br />
                         <label style={{ fontSize: '11px' }}>Place photos:</label><br />
                         <input type="file" multiple
